@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', monospace;
+
+  /* Light mode defaults */
+  --color-surface: oklch(0.99 0.01 280);
+  --color-surface-elevated: oklch(1 0 0);
+  --color-ink: oklch(0.22 0.02 280);
+  --color-ink-muted: oklch(0.45 0.02 260);
+  --color-border: oklch(0.9 0.02 280);
+  --color-accent: oklch(0.62 0.22 280);
+  --color-accent-soft: oklch(0.94 0.04 280);
+  --color-mint: oklch(0.72 0.14 175);
+  --color-mint-dim: oklch(0.35 0.08 175);
+
+  --shadow-glow: 0 0 80px -20px oklch(0.62 0.22 280 / 0.45);
+  --shadow-card: 0 25px 50px -12px oklch(0 0 0 / 0.15);
+}
+
+/* ── Dark mode values ─────────────────────────────────────── */
+/* Applied when: manually set OR system prefers dark          */
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-surface: oklch(0.14 0.02 280);
+  --color-surface-elevated: oklch(0.18 0.025 280);
+  --color-ink: oklch(0.96 0.01 280);
+  --color-ink-muted: oklch(0.68 0.02 260);
+  --color-border: oklch(0.28 0.02 280);
+  --color-accent: oklch(0.72 0.18 285);
+  --color-accent-soft: oklch(0.28 0.06 285);
+  --color-mint: oklch(0.78 0.12 175);
+  --color-mint-dim: oklch(0.45 0.1 175);
+  --shadow-glow: 0 0 100px -30px oklch(0.72 0.18 285 / 0.35);
+  --shadow-card: 0 25px 50px -12px oklch(0 0 0 / 0.5);
+}
+
+/* System preference — only when no explicit theme is pinned */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    color-scheme: dark;
+    --color-surface: oklch(0.14 0.02 280);
+    --color-surface-elevated: oklch(0.18 0.025 280);
+    --color-ink: oklch(0.96 0.01 280);
+    --color-ink-muted: oklch(0.68 0.02 260);
+    --color-border: oklch(0.28 0.02 280);
+    --color-accent: oklch(0.72 0.18 285);
+    --color-accent-soft: oklch(0.28 0.06 285);
+    --color-mint: oklch(0.78 0.12 175);
+    --color-mint-dim: oklch(0.45 0.1 175);
+    --shadow-glow: 0 0 100px -30px oklch(0.72 0.18 285 / 0.35);
+    --shadow-card: 0 25px 50px -12px oklch(0 0 0 / 0.5);
+  }
+}
+
+/* ── Base ─────────────────────────────────────────────────── */
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-ink-muted);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--color-accent) 35%, transparent);
+}

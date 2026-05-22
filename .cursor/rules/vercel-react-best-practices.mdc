@@ -1,0 +1,23 @@
+---
+description: 
+alwaysApply: true
+---
+
+# Vercel React Best Practices (project)
+
+Khi viết, refactor hoặc review React/Next.js trong repo này, tuân theo hướng dẫn hiệu năng của Vercel.
+
+**Nguồn chi tiết trong repo (đọc khi cần rule cụ thể):**
+- Tổng quan + khi nào áp dụng: `.agents/skills/vercel-react-best-practices/SKILL.md`
+- Bản đầy đủ cho agent: `.agents/skills/vercel-react-best-practices/AGENTS.md`
+- Từng rule có ví dụ: `.agents/skills/vercel-react-best-practices/rules/*.md`
+
+**Thứ tự ưu tiên (impact):**
+1. **async-** — Tránh waterfall: `Promise.all` cho tác vụ độc lập; defer `await`; Suspense hợp lý.
+2. **bundle-** — Tránh barrel import nặng; `dynamic import` cho component nặng; defer third-party không cần ngay.
+3. **server-** — Next/RSC: cache, fetch song song, giảm serialize xuống client.
+4. **client-** — Dedup fetch/listeners; passive scroll listeners khi cần.
+5. **rerender-** — Giảm re-render không cần thiết: memo/ref/deps đúng; không khai báo component trong component.
+6. **rendering-** / **js-** — Tối ưu render danh sách dài, JS trong vòng lặp nóng.
+
+Nếu task chỉ đụng backend hoặc file không liên quan React, có thể bỏ qua các mục không áp dụng.
