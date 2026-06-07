@@ -95,14 +95,14 @@ export function SummarizeControls({
               options={[
                 {
                   value: 'extractive' as const,
-                  label: 'Trích chọn',
+                  label: 'Trích xuất',
                   title: apiConfigured
                     ? 'PhoBERT (extractive) qua API'
                     : 'Thuật toán trích chọn cục bộ (khi chưa có API)',
                 },
                 {
                   value: 'abstractive' as const,
-                  label: 'Sinh văn',
+                  label: 'Trừu tượng',
                   disabled: !apiConfigured,
                   title: apiConfigured
                     ? 'Qwen (abstractive) qua API'
@@ -162,18 +162,18 @@ export function SummarizeControls({
                 options={[
                   {
                     value: 'extractive' as const,
-                    label: 'Trích chọn',
+                    label: 'Trích xuất',
                     title: 'PhoBERT (extractive) qua API',
                   },
                   {
                     value: 'abstractive' as const,
-                    label: 'Sinh văn',
+                    label: 'Trừu tượng',
                     disabled: !apiConfigured,
                     title: 'Abstractive qua API',
                   },
                   {
                     value: 'hybrid' as const,
-                    label: 'Hybrid',
+                    label: 'Lai ghép',
                     disabled: !apiConfigured,
                     title: '2-stage: PhoBERT -> SLM',
                   },
@@ -241,18 +241,18 @@ export function SummarizeControls({
                 options={[
                   {
                     value: 'extractive' as const,
-                    label: 'Trích chọn',
+                    label: 'Trích xuất',
                     title: 'PhoBERT (extractive) qua API',
                   },
                   {
                     value: 'abstractive' as const,
-                    label: 'Sinh văn',
+                    label: 'Trừu tượng',
                     disabled: !apiConfigured,
                     title: 'Abstractive qua API',
                   },
                   {
                     value: 'hybrid' as const,
-                    label: 'Hybrid',
+                    label: 'Lai ghép',
                     disabled: !apiConfigured,
                     title: '2-stage: PhoBERT -> SLM',
                   },

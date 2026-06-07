@@ -203,9 +203,9 @@ export function LinksGroupingPage() {
               }
               className="rounded-lg border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-ink)"
             >
-              <option value="extractive">Extractive</option>
-              <option value="abstractive">Abstractive</option>
-              <option value="hybrid">Hybrid</option>
+              <option value="extractive">Trích xuất</option>
+              <option value="abstractive">Trừu tượng</option>
+              <option value="hybrid">Lai ghép</option>
             </select>
           </label>
 

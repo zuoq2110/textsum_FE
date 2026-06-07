@@ -229,6 +229,34 @@ export default function App() {
               />
               </div>
 
+              <div className="flex flex-col h-full lg:sticky lg:top-18">
+                <SummarizeControls
+                  mode={ts.mode}
+                  onMode={ts.setMode}
+                  length={ts.length}
+                  onLength={ts.setLength}
+                  lang={ts.lang}
+                  onLang={ts.setLang}
+                  includeSentiment={ts.includeSentiment}
+                  onIncludeSentiment={ts.setIncludeSentiment}
+                  extractiveModelId={ts.extractiveModelId}
+                  onExtractiveModel={ts.setExtractiveModelId}
+                  abstractiveModelId={ts.abstractiveModelId}
+                  onAbstractiveModel={ts.setAbstractiveModelId}
+                  apiConfigured={ts.apiConfigured}
+                  loading={ts.loading}
+                  onSummarize={summarizeAndIndex}
+                  onOpenRagAi={openQaPage}
+                  ragIngesting={rag.ingesting}
+                  compareEnabled={ts.compareEnabled}
+                  onCompareEnabled={ts.setCompareEnabled}
+                  compareA={ts.compareA}
+                  setCompareA={ts.setCompareA}
+                  compareB={ts.compareB}
+                  setCompareB={ts.setCompareB}
+                />
+              </div>
+
               <div className="flex flex-col h-full">
               {ts.compareEnabled ? (
                 <div className="grid gap-4">
@@ -280,34 +308,6 @@ export default function App() {
                   sentiment={ts.sentiment}
                 />
               )}
-              </div>
-
-              <div className="flex flex-col h-full lg:sticky lg:top-18">
-                <SummarizeControls
-                  mode={ts.mode}
-                  onMode={ts.setMode}
-                  length={ts.length}
-                  onLength={ts.setLength}
-                  lang={ts.lang}
-                  onLang={ts.setLang}
-                  includeSentiment={ts.includeSentiment}
-                  onIncludeSentiment={ts.setIncludeSentiment}
-                  extractiveModelId={ts.extractiveModelId}
-                  onExtractiveModel={ts.setExtractiveModelId}
-                  abstractiveModelId={ts.abstractiveModelId}
-                  onAbstractiveModel={ts.setAbstractiveModelId}
-                  apiConfigured={ts.apiConfigured}
-                  loading={ts.loading}
-                  onSummarize={summarizeAndIndex}
-                  onOpenRagAi={openQaPage}
-                  ragIngesting={rag.ingesting}
-                  compareEnabled={ts.compareEnabled}
-                  onCompareEnabled={ts.setCompareEnabled}
-                  compareA={ts.compareA}
-                  setCompareA={ts.setCompareA}
-                  compareB={ts.compareB}
-                  setCompareB={ts.setCompareB}
-                />
               </div>
             </div>
 
