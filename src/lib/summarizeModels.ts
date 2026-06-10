@@ -34,7 +34,7 @@ export const ABSTRACTIVE_MODELS: ModelOption[] = [
     id: 'qwen2.5-7b-abstractive-finance-v1',
     label: 'Qwen 2.5 7B — tài chính (finetune)',
   },
-  { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' },
+  { id: 'gemini-3.1-flash-lite-v1', label: 'Gemini 3.1 Flash Lite — v1' },
   { id: 'gemini-2.5-flash-lite-v1', label: 'Gemini 2.5 Flash Lite' },
 ]
 
