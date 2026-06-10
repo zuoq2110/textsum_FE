@@ -1,9 +1,27 @@
 import { useMemo, useState } from 'react'
-import { BarChart3, ChevronRight, Clock, Info, Lock, Sparkles } from 'lucide-react'
+import {
+  AlertTriangle,
+  BarChart3,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Info,
+  Lock,
+  ShieldCheck,
+  Sparkles,
+  XCircle,
+} from 'lucide-react'
 import { type AuthSession } from '../hooks/useAuth'
 import { type HistoryEntry } from '../lib/historyStorage'
 import { type AllMetrics, computeAllMetrics, scoreLabel } from '../lib/metrics'
 import { evaluateWithJudge, type JudgeResponse, type PRFScore } from '../lib/judgeApi'
+import {
+  factCheckSummary,
+  type FactCheckResponse,
+  type FactCheckStatus,
+  type FactMatch,
+  type LlmVerification,
+} from '../lib/factCheckApi'
 import { cn } from '../lib/cn'
 
 type EvaluatePageProps = {
@@ -202,12 +220,211 @@ function MetricsCard({ metrics }: { metrics: DisplayMetrics }) {
   )
 }
 
+const FACT_TYPE_LABEL: Record<string, string> = {
+  money: 'Số tiền',
+  date: 'Thời gian',
+  ticker: 'Mã CK',
+  percent: 'Phần trăm',
+}
+
+function factTypeLabel(type: string): string {
+  return FACT_TYPE_LABEL[type] ?? type
+}
+
+function statusConfig(status: FactCheckStatus) {
+  if (status === 'pass') {
+    return {
+      label: 'Đạt',
+      icon: CheckCircle2,
+      tone: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
+    }
+  }
+  if (status === 'warn') {
+    return {
+      label: 'Cần lưu ý',
+      icon: AlertTriangle,
+      tone: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-300',
+    }
+  }
+  return {
+    label: 'Không đạt',
+    icon: XCircle,
+    tone: 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300',
+  }
+}
+
+function FactMatchList({
+  title,
+  items,
+  tone,
+}: {
+  title: string
+  items: FactMatch[]
+  tone: 'ok' | 'warn' | 'muted'
+}) {
+  if (!items.length) return null
+
+  const toneClass =
+    tone === 'ok'
+      ? 'border-emerald-500/30 bg-emerald-500/5'
+      : tone === 'warn'
+        ? 'border-amber-500/30 bg-amber-500/5'
+        : 'border-(--color-border) bg-(--color-surface)'
+
+  return (
+    <div>
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-(--color-ink-muted)/60">
+        {title} ({items.length})
+      </p>
+      <ul className="space-y-1.5">
+        {items.map((item, idx) => (
+          <li
+            key={`${item.normalized}-${idx}`}
+            className={cn('rounded-lg border px-2.5 py-2 text-xs', toneClass)}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-(--color-ink)">{item.text}</span>
+              <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-(--color-ink-muted) dark:bg-white/10">
+                {factTypeLabel(item.type)}
+              </span>
+            </div>
+            {item.reason ? (
+              <p className="mt-1 text-[11px] leading-relaxed text-(--color-ink-muted)">{item.reason}</p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function LlmVerificationList({ items }: { items: LlmVerification[] }) {
+  if (!items.length) return null
+
+  return (
+    <div>
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-(--color-ink-muted)/60">
+        Xác minh LLM ({items.length})
+      </p>
+      <ul className="space-y-2">
+        {items.map((item, idx) => (
+          <li
+            key={`${item.claim}-${idx}`}
+            className="rounded-lg border border-(--color-border) bg-(--color-surface) px-2.5 py-2 text-xs"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-(--color-ink)">{item.claim}</span>
+              <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-500">
+                {item.verdict}
+              </span>
+            </div>
+            {item.evidenceQuote ? (
+              <p className="mt-1 text-[11px] italic text-(--color-ink-muted)">
+                &ldquo;{item.evidenceQuote}&rdquo;
+              </p>
+            ) : null}
+            <p className="mt-1 text-[11px] leading-relaxed text-(--color-ink)">{item.reason}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function FactCheckCard({ data }: { data: FactCheckResponse }) {
+  const cfg = statusConfig(data.status)
+  const StatusIcon = cfg.icon
+
+  return (
+    <div className="mt-6 border-t border-(--color-border) pt-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="size-4 text-(--color-accent)" aria-hidden />
+          <h3 className="text-sm font-bold text-(--color-ink)">Hậu kiểm sự thật</h3>
+        </div>
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
+            cfg.tone,
+          )}
+        >
+          <StatusIcon className="size-3.5" aria-hidden />
+          {cfg.label}
+        </span>
+      </div>
+
+      {data.issues.length > 0 ? (
+        <div className="mb-4 space-y-2">
+          {data.issues.map((issue, idx) => (
+            <div
+              key={`${issue.message}-${idx}`}
+              className={cn(
+                'rounded-xl border px-3 py-2 text-xs',
+                issue.level === 'error'
+                  ? 'border-red-500/35 bg-red-500/10 text-red-200 dark:text-red-100'
+                  : issue.level === 'warning'
+                    ? 'border-amber-500/35 bg-amber-500/10 text-amber-900 dark:text-amber-100'
+                    : 'border-(--color-border) bg-(--color-surface) text-(--color-ink)',
+              )}
+            >
+              <p className="font-semibold">{issue.message}</p>
+              {issue.detail ? (
+                <p className="mt-0.5 opacity-90">{issue.detail}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-4 text-xs text-(--color-ink-muted)">
+          Không phát hiện vấn đề về số liệu và claim so với văn bản gốc.
+        </p>
+      )}
+
+      <div className="mb-3 flex flex-wrap gap-3 text-[11px] text-(--color-ink-muted)">
+        <span>
+          Regex: {data.regex.sourceFactCount} fact gốc / {data.regex.summaryFactCount} fact tóm tắt
+        </span>
+        {data.meta.pipeline ? <span>Pipeline: {data.meta.pipeline}</span> : null}
+        {data.meta.llmModel ? <span>Model: {data.meta.llmModel}</span> : null}
+        {data.meta.checkedAt ? (
+          <span>
+            Kiểm tra lúc{' '}
+            {new Intl.DateTimeFormat('vi-VN', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }).format(new Date(data.meta.checkedAt))}
+          </span>
+        ) : null}
+      </div>
+
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-(--color-ink-muted) hover:text-(--color-ink)">
+          <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" />
+          Chi tiết regex &amp; LLM
+        </summary>
+        <div className="mt-3 grid gap-4">
+          <FactMatchList title="Khớp source" items={data.regex.matched} tone="ok" />
+          <FactMatchList title="Nghi ngờ" items={data.regex.suspicious} tone="warn" />
+          <FactMatchList title="Không khớp" items={data.regex.unmatched} tone="muted" />
+          <LlmVerificationList items={data.llmVerifications} />
+        </div>
+      </details>
+    </div>
+  )
+}
+
 export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [judgeData, setJudgeData] = useState<JudgeResponse | null>(null)
   const [judgeLoading, setJudgeLoading] = useState(false)
   const [judgeError, setJudgeError] = useState<string | null>(null)
   const [metrics, setMetrics] = useState<DisplayMetrics | null>(null)
+  const [factCheckData, setFactCheckData] = useState<FactCheckResponse | null>(null)
+  const [factCheckLoading, setFactCheckLoading] = useState(false)
+  const [factCheckError, setFactCheckError] = useState<string | null>(null)
 
   const selected = useMemo(
     () => (selectedId ? history.find((e) => e.id === selectedId) ?? null : null),
@@ -250,6 +467,29 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
     }
   }
 
+  async function handleFactCheck(): Promise<void> {
+    if (!selected || factCheckLoading) return
+
+    setFactCheckLoading(true)
+    setFactCheckError(null)
+
+    try {
+      const res = await factCheckSummary({
+        source: selected.source,
+        summary: selected.summary,
+        language: 'vi',
+        useLlm: true,
+      })
+      setFactCheckData(res)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Không gọi được Fact-check API.'
+      setFactCheckData(null)
+      setFactCheckError(msg)
+    } finally {
+      setFactCheckLoading(false)
+    }
+  }
+
   // Not logged in — show gate
   if (!session) {
     return (
@@ -284,7 +524,7 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
           <h2 className="text-2xl font-bold text-(--color-ink)">Đánh giá chất lượng</h2>
         </div>
         <p className="text-sm text-(--color-ink-muted)">
-          Chọn một bản tóm tắt từ lịch sử để đo lường ROUGE, BLEU và các chỉ số chất lượng khác.
+          Chọn một bản tóm tắt từ lịch sử để đo lường ROUGE, BLEU và hậu kiểm số liệu so với văn bản gốc.
         </p>
       </div>
 
@@ -321,6 +561,9 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
                     setJudgeError(null)
                     setJudgeLoading(false)
                     setMetrics(null)
+                    setFactCheckData(null)
+                    setFactCheckError(null)
+                    setFactCheckLoading(false)
                   }}
                   className={cn(
                     'w-full rounded-2xl border p-3.5 text-left transition',
@@ -386,7 +629,7 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={handleEvaluate}
@@ -395,9 +638,17 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
                     >
                       {judgeLoading ? 'Đang đánh giá...' : 'Đánh giá'}
                     </button>
-                    {!metrics ? (
+                    <button
+                      type="button"
+                      onClick={handleFactCheck}
+                      disabled={factCheckLoading}
+                      className="rounded-xl border border-(--color-accent)/40 bg-(--color-accent-soft) px-4 py-2 text-xs font-semibold text-(--color-accent) transition hover:border-(--color-accent)/60 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {factCheckLoading ? 'Đang hậu kiểm...' : 'Hậu kiểm'}
+                    </button>
+                    {!metrics && !factCheckData ? (
                       <span className="text-xs text-(--color-ink-muted)">
-                        Chọn văn bản xong, bấm Đánh giá để gọi Judge API.
+                        Bấm Đánh giá để lấy điểm, hoặc Hậu kiểm để kiểm tra số liệu.
                       </span>
                     ) : null}
                   </div>
@@ -407,6 +658,14 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
                   {judgeError ? (
                     <p className="mt-3 text-xs text-amber-400">
                       Judge API lỗi: {judgeError}
+                    </p>
+                  ) : null}
+                  {factCheckLoading ? (
+                    <p className="mt-3 text-xs text-(--color-ink-muted)">Đang chạy hậu kiểm fact-check...</p>
+                  ) : null}
+                  {factCheckError ? (
+                    <p className="mt-3 text-xs text-amber-400">
+                      Fact-check API lỗi: {factCheckError}
                     </p>
                   ) : null}
                   {judgeData?.referenceSummary ? (
@@ -422,6 +681,7 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
                 </div>
 
                 {metrics ? <MetricsCard metrics={metrics} /> : null}
+                {factCheckData ? <FactCheckCard data={factCheckData} /> : null}
               </div>
             ) : (
               <div className="flex h-full min-h-[280px] items-center justify-center rounded-2xl border border-dashed border-(--color-border) bg-(--color-surface-elevated)/50">
