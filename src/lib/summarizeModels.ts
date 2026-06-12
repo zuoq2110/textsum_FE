@@ -11,7 +11,7 @@ export function nextModelOptionId(models: ModelOption[], currentId: string): str
 }
 
 export const EXTRACTIVE_MODELS: ModelOption[] = [
-  { id: 'phobert-extractive-v1', label: 'PhoBERT — finetune (mặc định)' },
+  { id: 'phobert-extractive-v1', label: 'PhoBERT' },
   { id: 'phobert-extractive-v2', label: 'PhoBERT — v2' },
   {
     id: 'phobert-finance-extractive-v1',

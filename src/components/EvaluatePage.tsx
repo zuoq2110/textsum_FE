@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
   BarChart3,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock,
   Info,
@@ -23,6 +24,7 @@ import {
   type LlmVerification,
 } from '../lib/factCheckApi'
 import { cn } from '../lib/cn'
+import { resolveModelLabel } from '../lib/summarizeModels'
 
 type EvaluatePageProps = {
   session: AuthSession | null
@@ -34,6 +36,92 @@ const MODE_LABEL: Record<string, string> = {
   extractive: 'Trích chọn',
   abstractive: 'Trừu tượng',
   hybrid: 'Lai ghép',
+}
+
+const HISTORY_PAGE_SIZE = 6
+
+type HistoryPaginationProps = {
+  currentPage: number
+  totalPages: number
+  totalItems: number
+  pageSize: number
+  onPage: (page: number) => void
+}
+
+function HistoryPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPage,
+}: HistoryPaginationProps) {
+  if (totalPages <= 1) return null
+
+  const from = (currentPage - 1) * pageSize + 1
+  const to = Math.min(currentPage * pageSize, totalItems)
+
+  const pages: (number | 'ellipsis')[] = []
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+      pages.push(i)
+    } else if (pages[pages.length - 1] !== 'ellipsis') {
+      pages.push('ellipsis')
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 border-t border-(--color-border) pt-3">
+      <p className="text-center text-[10px] text-(--color-ink-muted)">
+        <span className="font-medium text-(--color-ink)">{from}–{to}</span> / {totalItems} bài
+      </p>
+      <div className="flex items-center justify-center gap-1">
+        <button
+          type="button"
+          onClick={() => onPage(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="flex size-7 items-center justify-center rounded-lg border border-(--color-border) bg-(--color-surface-elevated) text-(--color-ink-muted) transition hover:border-(--color-accent)/50 hover:text-(--color-accent) disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Trang trước"
+        >
+          <ChevronLeft className="size-3.5" />
+        </button>
+
+        {pages.map((p, idx) =>
+          p === 'ellipsis' ? (
+            <span
+              key={`ellipsis-${idx}`}
+              className="flex size-7 items-center justify-center text-[10px] text-(--color-ink-muted)"
+            >
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPage(p)}
+              className={cn(
+                'flex size-7 items-center justify-center rounded-lg border text-[10px] font-medium transition',
+                p === currentPage
+                  ? 'border-(--color-accent) bg-(--color-accent) text-white'
+                  : 'border-(--color-border) bg-(--color-surface-elevated) text-(--color-ink) hover:border-(--color-accent)/50 hover:text-(--color-accent)',
+              )}
+            >
+              {p}
+            </button>
+          ),
+        )}
+
+        <button
+          type="button"
+          onClick={() => onPage(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="flex size-7 items-center justify-center rounded-lg border border-(--color-border) bg-(--color-surface-elevated) text-(--color-ink-muted) transition hover:border-(--color-accent)/50 hover:text-(--color-accent) disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Trang sau"
+        >
+          <ChevronRight className="size-3.5" />
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function formatTime(ts: number): string {
@@ -116,6 +204,22 @@ function ScoreBar({
 }
 
 type DisplayMetrics = AllMetrics & { bertscore?: PRFScore }
+
+type EntryEvalState = {
+  judgeData: JudgeResponse | null
+  judgeError: string | null
+  metrics: DisplayMetrics | null
+  factCheckData: FactCheckResponse | null
+  factCheckError: string | null
+}
+
+const EMPTY_EVAL: EntryEvalState = {
+  judgeData: null,
+  judgeError: null,
+  metrics: null,
+  factCheckData: null,
+  factCheckError: null,
+}
 
 function MetricsCard({ metrics }: { metrics: DisplayMetrics }) {
   return (
@@ -418,24 +522,51 @@ function FactCheckCard({ data }: { data: FactCheckResponse }) {
 
 export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [judgeData, setJudgeData] = useState<JudgeResponse | null>(null)
-  const [judgeLoading, setJudgeLoading] = useState(false)
-  const [judgeError, setJudgeError] = useState<string | null>(null)
-  const [metrics, setMetrics] = useState<DisplayMetrics | null>(null)
-  const [factCheckData, setFactCheckData] = useState<FactCheckResponse | null>(null)
-  const [factCheckLoading, setFactCheckLoading] = useState(false)
-  const [factCheckError, setFactCheckError] = useState<string | null>(null)
+  const [historyPage, setHistoryPage] = useState(1)
+  const [evalByEntry, setEvalByEntry] = useState<Record<string, EntryEvalState>>({})
+  const [judgeLoadingId, setJudgeLoadingId] = useState<string | null>(null)
+  const [factCheckLoadingId, setFactCheckLoadingId] = useState<string | null>(null)
+
+  const historyTotalPages = Math.max(1, Math.ceil(history.length / HISTORY_PAGE_SIZE))
+
+  const paginatedHistory = useMemo(
+    () =>
+      history.slice(
+        (historyPage - 1) * HISTORY_PAGE_SIZE,
+        historyPage * HISTORY_PAGE_SIZE,
+      ),
+    [history, historyPage],
+  )
+
+  useEffect(() => {
+    if (historyPage > historyTotalPages) {
+      setHistoryPage(historyTotalPages)
+    }
+  }, [historyPage, historyTotalPages])
 
   const selected = useMemo(
     () => (selectedId ? history.find((e) => e.id === selectedId) ?? null : null),
     [selectedId, history],
   )
 
+  const currentEval = selectedId ? (evalByEntry[selectedId] ?? EMPTY_EVAL) : EMPTY_EVAL
+  const { judgeData, judgeError, metrics, factCheckData, factCheckError } = currentEval
+  const judgeLoading = selectedId !== null && judgeLoadingId === selectedId
+  const factCheckLoading = selectedId !== null && factCheckLoadingId === selectedId
+
+  function patchEval(entryId: string, patch: Partial<EntryEvalState>): void {
+    setEvalByEntry((prev) => ({
+      ...prev,
+      [entryId]: { ...(prev[entryId] ?? EMPTY_EVAL), ...patch },
+    }))
+  }
+
   async function handleEvaluate(): Promise<void> {
     if (!selected || judgeLoading) return
 
-    setJudgeLoading(true)
-    setJudgeError(null)
+    const entryId = selected.id
+    setJudgeLoadingId(entryId)
+    patchEval(entryId, { judgeError: null })
 
     const local = computeAllMetrics(selected.source, selected.summary)
     try {
@@ -449,29 +580,34 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
         includeCritique: false,
       })
       const remote = res.metrics
-      setJudgeData(res)
-      setMetrics({
-        rouge1: remote.rouge1 ?? local.rouge1,
-        rouge2: remote.rouge2 ?? local.rouge2,
-        rougeL: remote.rougeL ?? local.rougeL,
-        bleu: typeof remote.bleu === 'number' ? remote.bleu : local.bleu,
-        ...(remote.bertscore ? { bertscore: remote.bertscore } : {}),
+      patchEval(entryId, {
+        judgeData: res,
+        metrics: {
+          rouge1: remote.rouge1 ?? local.rouge1,
+          rouge2: remote.rouge2 ?? local.rouge2,
+          rougeL: remote.rougeL ?? local.rougeL,
+          bleu: typeof remote.bleu === 'number' ? remote.bleu : local.bleu,
+          ...(remote.bertscore ? { bertscore: remote.bertscore } : {}),
+        },
       })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Không gọi được Judge API, đang dùng điểm local.'
-      setJudgeData(null)
-      setJudgeError(msg)
-      setMetrics(local)
+      patchEval(entryId, {
+        judgeData: null,
+        judgeError: msg,
+        metrics: local,
+      })
     } finally {
-      setJudgeLoading(false)
+      setJudgeLoadingId((id) => (id === entryId ? null : id))
     }
   }
 
   async function handleFactCheck(): Promise<void> {
     if (!selected || factCheckLoading) return
 
-    setFactCheckLoading(true)
-    setFactCheckError(null)
+    const entryId = selected.id
+    setFactCheckLoadingId(entryId)
+    patchEval(entryId, { factCheckError: null })
 
     try {
       const res = await factCheckSummary({
@@ -480,13 +616,12 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
         language: 'vi',
         useLlm: true,
       })
-      setFactCheckData(res)
+      patchEval(entryId, { factCheckData: res })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Không gọi được Fact-check API.'
-      setFactCheckData(null)
-      setFactCheckError(msg)
+      patchEval(entryId, { factCheckData: null, factCheckError: msg })
     } finally {
-      setFactCheckLoading(false)
+      setFactCheckLoadingId((id) => (id === entryId ? null : id))
     }
   }
 
@@ -551,20 +686,17 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
               Lịch sử tóm tắt ({history.length})
             </p>
             <div className="flex flex-col gap-2">
-              {history.map((entry) => (
+              {paginatedHistory.map((entry) => {
+                const modelLabel = resolveModelLabel(entry.model)
+                const hasEval =
+                  Boolean(evalByEntry[entry.id]?.metrics) ||
+                  Boolean(evalByEntry[entry.id]?.factCheckData)
+
+                return (
                 <button
                   key={entry.id}
                   type="button"
-                  onClick={() => {
-                    setSelectedId(entry.id)
-                    setJudgeData(null)
-                    setJudgeError(null)
-                    setJudgeLoading(false)
-                    setMetrics(null)
-                    setFactCheckData(null)
-                    setFactCheckError(null)
-                    setFactCheckLoading(false)
-                  }}
+                  onClick={() => setSelectedId(entry.id)}
                   className={cn(
                     'w-full rounded-2xl border p-3.5 text-left transition',
                     selectedId === entry.id
@@ -574,17 +706,39 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
                 >
                   {/* Mode badge */}
                   <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                        selectedId === entry.id
-                          ? 'bg-(--color-accent)/15 text-(--color-accent)'
-                          : 'bg-(--color-surface) text-(--color-ink-muted)',
-                      )}
-                    >
-                      {MODE_LABEL[entry.mode] ?? entry.mode}
-                    </span>
-                    <span className="flex items-center gap-1 text-[10px] text-(--color-ink-muted)/60">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1">
+                      <span
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                          selectedId === entry.id
+                            ? 'bg-(--color-accent)/15 text-(--color-accent)'
+                            : 'bg-(--color-surface) text-(--color-ink-muted)',
+                        )}
+                      >
+                        {MODE_LABEL[entry.mode] ?? entry.mode}
+                      </span>
+                      {modelLabel ? (
+                        <span
+                          className={cn(
+                            'truncate rounded-full px-2 py-0.5 text-[10px] font-medium',
+                            selectedId === entry.id
+                              ? 'bg-(--color-accent)/10 text-(--color-accent)/90'
+                              : 'bg-(--color-surface) text-(--color-ink-muted)/80',
+                          )}
+                          title={modelLabel}
+                        >
+                          {modelLabel}
+                        </span>
+                      ) : null}
+                      {hasEval ? (
+                        <span
+                          className="size-1.5 shrink-0 rounded-full bg-emerald-500"
+                          title="Đã đánh giá"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 text-[10px] text-(--color-ink-muted)/60">
                       <Clock className="size-3" />
                       {formatTime(entry.createdAt)}
                     </span>
@@ -599,8 +753,16 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
                     → {entry.summary}
                   </p>
                 </button>
-              ))}
+                )
+              })}
             </div>
+            <HistoryPagination
+              currentPage={historyPage}
+              totalPages={historyTotalPages}
+              totalItems={history.length}
+              pageSize={HISTORY_PAGE_SIZE}
+              onPage={setHistoryPage}
+            />
           </div>
 
           {/* Right — Metrics */}
@@ -608,9 +770,21 @@ export function EvaluatePage({ session, history, navigateTo }: EvaluatePageProps
             {selected ? (
               <div className="rounded-2xl border border-(--color-border) bg-(--color-surface-elevated) p-6 shadow-[var(--shadow-card)]">
                 <div className="mb-5 border-b border-(--color-border) pb-4">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-(--color-ink-muted)/60">
-                    Văn bản đã chọn
-                  </p>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-(--color-ink-muted)/60">
+                      Văn bản đã chọn
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-(--color-ink-muted)">
+                      <span className="rounded-full bg-(--color-surface) px-2.5 py-0.5 font-semibold text-(--color-ink)">
+                        {MODE_LABEL[selected.mode] ?? selected.mode}
+                      </span>
+                      {resolveModelLabel(selected.model) ? (
+                        <span className="rounded-full border border-(--color-accent)/30 bg-(--color-accent-soft) px-2.5 py-0.5 font-medium text-(--color-accent)">
+                          Model: {resolveModelLabel(selected.model)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-(--color-ink-muted)/60">
